@@ -1,0 +1,1 @@
+I am a computer science student skilled in Java, Python, and problem-solving. I have worked with data structures, object-oriented programming, and version control using Git. I'm passionate about building scalable backend systems and improving customer experiences.

@@ -1,0 +1,70 @@
+import java.io.*;
+import java.util.*;
+
+public class JobMatchAI {
+    public static void main(String[] args) throws IOException {
+        // Load files
+        String resume = readFile("resume.txt");
+        String jobDesc = readFile("job_description.txt");
+
+        // Extract keywords from job description
+        Set<String> keywords = extractKeywords(jobDesc);
+
+        // Tokenize resume and count matches
+        int matches = 0;
+        List<String> resumeWords = Arrays.asList(resume.toLowerCase().split("\\W+"));
+        Set<String> matchedKeywords = new HashSet<>();
+
+        for (String keyword : keywords) {
+            if (resumeWords.contains(keyword.toLowerCase())) {
+                matches++;
+                matchedKeywords.add(keyword);
+            }
+        }
+
+        // Score calculation
+        int total = keywords.size();
+        double score = (double) matches / total * 100;
+
+        // Output results
+        System.out.println("Match Score: " + String.format("%.2f", score) + "%");
+        System.out.println("Matched Keywords: " + matchedKeywords);
+
+        keywords.removeAll(matchedKeywords);
+        System.out.println("Suggested Keywords to Add: " + keywords);
+    }
+
+    // Reads text file into a string
+    public static String readFile(String filename) throws IOException {
+        BufferedReader reader = new BufferedReader(new FileReader(filename));
+        StringBuilder sb = new StringBuilder();
+        String line;
+
+        while ((line = reader.readLine()) != null) {
+            sb.append(line).append(" ");
+        }
+
+        reader.close();
+        return sb.toString();
+    }
+
+    // Extracts keywords from job description (naive approach: longest words)
+    public static Set<String> extractKeywords(String text) {
+        String[] words = text.toLowerCase().split("\\W+");
+        Set<String> keywords = new HashSet<>();
+
+        for (String word : words) {
+            if (word.length() > 4 && !isCommon(word)) {
+                keywords.add(word);
+            }
+        }
+
+        return keywords;
+    }
+
+    // Ignore common stopwords
+    public static boolean isCommon(String word) {
+        String[] stopwords = { "about", "with", "this", "that", "which", "their", "have", "from", "these", "those", "where", "there" };
+        return Arrays.asList(stopwords).contains(word);
+    }
+}

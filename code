@@ -1,70 +1,299 @@
 import java.io.*;
 import java.util.*;
+import java.util.regex.Pattern;
 
 public class JobMatchAI {
+    private static final Set<String> STOPWORDS = new HashSet<>(Arrays.asList(
+        "a","an","and","the","to","of","in","on","at","for","from","with","by","or","as",
+        "is","are","was","were","be","been","being","it","its","that","this","these","those",
+        "you","your","we","our","they","their","he","she","him","her","i","me","my",
+        "about","into","across","over","under","up","down","out","if","then","so","than",
+        "but","also","such","which","who","whom","where","when","how"
+    ));
+
+    private static final Map<String, Double> SKILL_WEIGHTS = new HashMap<>();
+    static {
+        SKILL_WEIGHTS.put("java", 2.0);
+        SKILL_WEIGHTS.put("python", 2.0);
+        SKILL_WEIGHTS.put("javascript", 2.0);
+        SKILL_WEIGHTS.put("js", 2.0);
+        SKILL_WEIGHTS.put("react", 2.0);
+        SKILL_WEIGHTS.put("node", 2.0);
+        SKILL_WEIGHTS.put("nodejs", 2.0);
+        SKILL_WEIGHTS.put("sql", 2.0);
+        SKILL_WEIGHTS.put("nosql", 2.0);
+        SKILL_WEIGHTS.put("aws", 2.2);
+        SKILL_WEIGHTS.put("azure", 2.2);
+        SKILL_WEIGHTS.put("gcp", 2.2);
+        SKILL_WEIGHTS.put("docker", 2.0);
+        SKILL_WEIGHTS.put("kubernetes", 2.2);
+        SKILL_WEIGHTS.put("git", 1.6);
+        SKILL_WEIGHTS.put("linux", 1.8);
+        SKILL_WEIGHTS.put("data", 1.4);
+        SKILL_WEIGHTS.put("ml", 2.2);
+        SKILL_WEIGHTS.put("machinelearning", 2.2);
+        SKILL_WEIGHTS.put("deeplearning", 2.2);
+        SKILL_WEIGHTS.put("tensorflow", 2.0);
+        SKILL_WEIGHTS.put("pytorch", 2.0);
+        SKILL_WEIGHTS.put("oop", 1.8);
+        SKILL_WEIGHTS.put("datastructures", 2.2);
+        SKILL_WEIGHTS.put("algorithms", 2.2);
+        SKILL_WEIGHTS.put("rest", 1.8);
+        SKILL_WEIGHTS.put("restapi", 2.0);
+        SKILL_WEIGHTS.put("microservices", 2.0);
+        SKILL_WEIGHTS.put("communication", 1.2);
+        SKILL_WEIGHTS.put("leadership", 1.2);
+        SKILL_WEIGHTS.put("teamwork", 1.2);
+        SKILL_WEIGHTS.put("collaboration", 1.2);
+        SKILL_WEIGHTS.put("problem-solving", 1.2);
+    }
+
+    private static final Map<String, String> SYNONYMS = new HashMap<>();
+    static {
+        SYNONYMS.put("js", "javascript");
+        SYNONYMS.put("nodejs", "node");
+        SYNONYMS.put("reactjs", "react");
+        SYNONYMS.put("postgre", "postgres");
+        SYNONYMS.put("postgresql", "postgres");
+        SYNONYMS.put("ml", "machine learning");
+        SYNONYMS.put("ai", "artificial intelligence");
+        SYNONYMS.put("oop", "object oriented programming");
+        SYNONYMS.put("rest api", "rest");
+    }
+
+    private static final List<String> PHRASES = Arrays.asList(
+        "data structures", "object oriented programming", "machine learning", "deep learning",
+        "rest api", "micro services", "cloud computing", "version control"
+    );
+
+    private static final Pattern NON_WORD = Pattern.compile("[^a-z0-9]+");
+
     public static void main(String[] args) throws IOException {
-        // Load files
         String resume = readFile("resume.txt");
         String jobDesc = readFile("job_description.txt");
 
-        // Extract keywords from job description
-        Set<String> keywords = extractKeywords(jobDesc);
+        String normResume = normalize(resume);
+        String normJD     = normalize(jobDesc);
 
-        // Tokenize resume and count matches
-        int matches = 0;
-        List<String> resumeWords = Arrays.asList(resume.toLowerCase().split("\\W+"));
-        Set<String> matchedKeywords = new HashSet<>();
+        List<String> resumeTokens = tokenize(normResume);
+        List<String> jdTokens     = tokenize(normJD);
 
-        for (String keyword : keywords) {
-            if (resumeWords.contains(keyword.toLowerCase())) {
-                matches++;
-                matchedKeywords.add(keyword);
+        List<String> stemResume = stemList(resumeTokens);
+        List<String> stemJD     = stemList(jdTokens);
+
+        Set<String> resumeSet = new HashSet<>(stemResume);
+        Map<String, Integer> resumeFreq = freqMap(stemResume);
+
+        Set<String> jdKeywords = extractKeywords(stemJD);
+        Set<String> jdPhrases  = extractPhrases(normJD);
+
+        Set<String> jdPhraseKeys = new HashSet<>();
+        for (String p : jdPhrases) jdPhraseKeys.add(joinPhraseKey(p));
+
+        Set<String> allJDKeys = new HashSet<>(jdKeywords);
+        allJDKeys.addAll(jdPhraseKeys);
+
+        Set<String> resumeKeys = new HashSet<>(resumeSet);
+        resumeKeys.addAll(extractPhraseKeysFromText(normResume));
+
+        Map<String, Double> keyWeights = new HashMap<>();
+        double totalWeight = 0.0;
+        for (String key : allJDKeys) {
+            double w = baseWeight(key);
+            keyWeights.put(key, w);
+            totalWeight += w;
+        }
+
+        Set<String> matched = new TreeSet<>();
+        double matchedWeight = 0.0;
+        for (String key : allJDKeys) {
+            if (resumeKeys.contains(key)) {
+                matched.add(key);
+                matchedWeight += keyWeights.getOrDefault(key, 1.0);
             }
         }
 
-        // Score calculation
-        int total = keywords.size();
-        double score = (double) matches / total * 100;
+        double score = (totalWeight == 0.0) ? 0.0 : (matchedWeight / totalWeight) * 100.0;
 
-        // Output results
-        System.out.println("Match Score: " + String.format("%.2f", score) + "%");
-        System.out.println("Matched Keywords: " + matchedKeywords);
+        Set<String> missing = new TreeSet<>(allJDKeys);
+        missing.removeAll(matched);
 
-        keywords.removeAll(matchedKeywords);
-        System.out.println("Suggested Keywords to Add: " + keywords);
-    }
+        List<String> prettyMatched = prettyKeys(matched);
+        List<String> prettyMissing = prettyKeys(missing);
 
-    // Reads text file into a string
-    public static String readFile(String filename) throws IOException {
-        BufferedReader reader = new BufferedReader(new FileReader(filename));
-        StringBuilder sb = new StringBuilder();
-        String line;
-
-        while ((line = reader.readLine()) != null) {
-            sb.append(line).append(" ");
+        List<Map.Entry<String, Double>> sortedMissing = new ArrayList<>();
+        for (String k : missing) sortedMissing.add(Map.entry(k, keyWeights.get(k)));
+        sortedMissing.sort((a,b) -> Double.compare(b.getValue(), a.getValue()));
+        List<String> topMissing = new ArrayList<>();
+        for (int i = 0; i < Math.min(5, sortedMissing.size()); i++) {
+            topMissing.add(prettyKey(sortedMissing.get(i).getKey()));
         }
 
-        reader.close();
+        List<String> bulletIdeas = new ArrayList<>();
+        for (String m : topMissing) {
+            bulletIdeas.add("Add a bullet like: “Used " + m +
+                " to build a small project or support a team task; measured impact (speed, reliability, or user outcome).”");
+        }
+
+        System.out.println("=== JobMatchAI (Improved) ===");
+        System.out.println("Match Score: " + String.format("%.2f", score) + "%\n");
+        System.out.println("Matched (" + prettyMatched.size() + "): " + prettyMatched);
+        System.out.println("Missing (" + prettyMissing.size() + "): " + prettyMissing + "\n");
+
+        if (!topMissing.isEmpty()) {
+            System.out.println("Top Suggestions to Add (most important first): " + topMissing + "\n");
+        } else {
+            System.out.println("Top Suggestions to Add: (none) Great coverage!\n");
+        }
+
+        if (!bulletIdeas.isEmpty()) {
+            System.out.println("Resume Bullet Ideas:");
+            for (String s : bulletIdeas) System.out.println(" - " + s);
+        }
+    }
+
+    public static String readFile(String filename) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line).append(" ");
+        }
         return sb.toString();
     }
 
-    // Extracts keywords from job description (naive approach: longest words)
-    public static Set<String> extractKeywords(String text) {
-        String[] words = text.toLowerCase().split("\\W+");
-        Set<String> keywords = new HashSet<>();
+    private static String normalize(String text) {
+        text = text.toLowerCase();
+        for (Map.Entry<String, String> e : SYNONYMS.entrySet()) {
+            text = text.replace(e.getKey(), e.getValue());
+        }
+        text = NON_WORD.matcher(text).replaceAll(" ");
+        text = text.replaceAll("\\s+", " ").trim();
+        return text;
+    }
 
-        for (String word : words) {
-            if (word.length() > 4 && !isCommon(word)) {
-                keywords.add(word);
+    private static List<String> tokenize(String text) {
+        if (text.isEmpty()) return Collections.emptyList();
+        return Arrays.asList(text.split(" "));
+    }
+
+    private static String stem(String w) {
+        if (w.endsWith("ing") && w.length() > 5) w = w.substring(0, w.length()-3);
+        if (w.endsWith("ed")  && w.length() > 4) w = w.substring(0, w.length()-2);
+        if (w.endsWith("es")  && w.length() > 4) w = w.substring(0, w.length()-2);
+        if (w.endsWith("s")   && w.length() > 3) w = w.substring(0, w.length()-1);
+        if (w.equals("developer")) w = "develop";
+        if (w.equals("development")) w = "develop";
+        return w;
+    }
+
+    private static List<String> stemList(List<String> words) {
+        List<String> out = new ArrayList<>(words.size());
+        for (String w : words) out.add(stem(w));
+        return out;
+    }
+
+    private static Set<String> extractKeywords(List<String> jdTokens) {
+        Set<String> keys = new HashSet<>();
+        for (String w : jdTokens) {
+            if (w.length() < 2) continue;
+            if (STOPWORDS.contains(w)) continue;
+            if (w.matches("\\d+")) continue;
+            keys.add(w);
+        }
+        return keys;
+    }
+
+    private static Set<String> extractPhrases(String normalizedJD) {
+        Set<String> out = new HashSet<>();
+        List<String> tokens = tokenize(normalizedJD);
+        for (int i = 0; i < tokens.size(); i++) {
+            String a = tokens.get(i);
+            if (STOPWORDS.contains(a)) continue;
+            if (i + 1 < tokens.size()) {
+                String b = tokens.get(i + 1);
+                if (!STOPWORDS.contains(b)) {
+                    String bigram = a + " " + b;
+                    if (isLikelySkillPhrase(bigram)) out.add(bigram);
+                }
+            }
+            if (i + 2 < tokens.size()) {
+                String b = tokens.get(i + 1);
+                String c = tokens.get(i + 2);
+                if (!STOPWORDS.contains(b) && !STOPWORDS.contains(c)) {
+                    String trigram = a + " " + b + " " + c;
+                    if (isLikelySkillPhrase(trigram)) out.add(trigram);
+                }
             }
         }
-
-        return keywords;
+        for (String p : PHRASES) {
+            if (normalizedJD.contains(p)) out.add(p);
+        }
+        return out;
     }
 
-    // Ignore common stopwords
-    public static boolean isCommon(String word) {
-        String[] stopwords = { "about", "with", "this", "that", "which", "their", "have", "from", "these", "those", "where", "there" };
-        return Arrays.asList(stopwords).contains(word);
+    private static boolean isLikelySkillPhrase(String phrase) {
+        if (phrase.length() < 5) return false;
+        if (!phrase.matches(".*[a-z].*")) return false;
+        for (String k : SKILL_WEIGHTS.keySet()) {
+            if (phrase.contains(k)) return true;
+        }
+        for (String p : PHRASES) {
+            if (phrase.equals(p)) return true;
+        }
+        return true;
+    }
+
+    private static String joinPhraseKey(String phrase) {
+        return phrase.replace(" ", "");
+    }
+
+    private static Set<String> extractPhraseKeysFromText(String normalizedText) {
+        Set<String> out = new HashSet<>();
+        for (String p : PHRASES) {
+            if (normalizedText.contains(p)) out.add(joinPhraseKey(p));
+        }
+        for (String p : extractPhrases(normalizedText)) {
+            out.add(joinPhraseKey(p));
+        }
+        return out;
+    }
+
+    private static double baseWeight(String key) {
+        Double w = SKILL_WEIGHTS.get(key);
+        if (w != null) return w;
+        if (SKILL_WEIGHTS.containsKey(key)) return SKILL_WEIGHTS.get(key);
+        double base = 1.0;
+        if (key.length() >= 12) base += 0.5;
+        return base;
+    }
+
+    private static Map<String, Integer> freqMap(List<String> words) {
+        Map<String, Integer> map = new HashMap<>();
+        for (String w : words) map.put(w, map.getOrDefault(w, 0) + 1);
+        return map;
+    }
+
+    private static List<Map.Entry<String, Integer>> topN(Map<String, Integer> freq, int n) {
+        List<Map.Entry<String, Integer>> list = new ArrayList<>(freq.entrySet());
+        list.sort((a,b) -> b.getValue() - a.getValue());
+        if (list.size() > n) return list.subList(0, n);
+        return list;
+    }
+
+    private static List<String> prettyKeys(Set<String> keys) {
+        List<String> out = new ArrayList<>();
+        for (String k : keys) out.add(prettyKey(k));
+        Collections.sort(out);
+        return out;
+    }
+
+    private static String prettyKey(String k) {
+        if (k.equals("machinelearning")) return "machine learning";
+        if (k.equals("deeplearning"))    return "deep learning";
+        if (k.equals("datastructures"))  return "data structures";
+        if (k.equals("restapi"))         return "REST API";
+        if (k.equals("objectorientedprogramming")) return "object oriented programming";
+        return k;
     }
 }
+

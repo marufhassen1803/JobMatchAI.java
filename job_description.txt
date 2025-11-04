@@ -1,1 +1,4 @@
-We are looking for a software engineering intern with experience in Java, distributed systems, object-oriented design, algorithms, and customer-obsessed problem-solving. Knowledge of Git, AWS, or machine learning is a plus.
+We are looking for a Java developer with strong data structures and algorithms skills.
+Experience with REST API development, Git, and cloud computing (AWS or Azure) is preferred.
+Bonus: familiarity with machine learning concepts.
+

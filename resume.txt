@@ -1,1 +1,5 @@
+Maruf Hassen — Student Developer
+Skills: Java, Python, SQL, Git, Data Structures, OOP, REST API, basic AWS
+Projects: Built a small Java API with REST endpoints; used Git and GitHub Actions.
+Experience: TA for intro programming; helped students with Java and algorithms.
 
